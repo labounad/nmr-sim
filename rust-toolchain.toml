@@ -1,0 +1,6 @@
+# Pinning the stable channel (not a specific version) so contributors pick
+# up fixes automatically. CI uses the same spec via dtolnay/rust-toolchain.
+[toolchain]
+channel    = "stable"
+components = ["rustfmt", "clippy"]
+profile    = "default"

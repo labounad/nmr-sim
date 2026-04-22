@@ -1,0 +1,23 @@
+[package]
+name = "nmr-sim"
+description = "Fast open-source spin dynamics simulation for NMR and beyond"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+keywords.workspace = true
+categories.workspace = true
+readme = "../../README.md"
+
+[lints]
+workspace = true
+
+[dependencies]
+# Intentionally empty for now. Upcoming additions (see docs/architecture.md):
+# - nalgebra or ndarray + linear-algebra backend, for dense spin operators
+# - num-complex, for complex-valued density matrices
+# - rayon, for embarrassingly-parallel spectral computations
+
+[dev-dependencies]
+# approx = "0.5"     # coming soon: for numerical test assertions

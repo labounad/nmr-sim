@@ -1,0 +1,27 @@
+# Rust build artifacts
+/target/
+**/target/
+**/*.rs.bk
+
+# IDE / editor
+.idea/
+.vscode/
+*.swp
+*.swo
+.*.swp
+.*.swo
+.DS_Store
+
+# Python helper scripts
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Simulation outputs produced by the example binary + Python scripts.
+# These sit at the repo root because `cargo run --example` runs from
+# the workspace root. Keep them out of git.
+/spectrum.csv
+/spectrum.png
+/accuracy_test.png
+/template_explanation.png

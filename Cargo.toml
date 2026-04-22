@@ -1,0 +1,45 @@
+# Workspace manifest for nmr-sim.
+#
+# We're using a Cargo workspace (rather than a single crate) because the
+# long-term shape of this project spans several domains — simulation,
+# I/O, analysis, GUI, ML — and splitting those into crates keeps compile
+# times reasonable and lets consumers pull in only what they need.
+#
+# In the bootstrap phase there's only one crate, `nmr-sim`. New crates
+# (nmr-io, nmr-analysis, nmr-cli, …) will be added here as they come online.
+# See docs/architecture.md for the intended roadmap.
+
+[workspace]
+resolver = "2"
+members = ["crates/nmr-sim"]
+
+# Shared package metadata — individual crates inherit via `field.workspace = true`.
+[workspace.package]
+version       = "0.1.0"
+edition       = "2021"
+rust-version  = "1.75"
+license       = "MIT OR Apache-2.0"
+authors       = ["Lucas Labounader <labounader@scripps.edu>", "nmr-sim contributors"]
+readme        = "README.md"
+keywords      = ["nmr", "spin-dynamics", "simulation", "chemistry", "spectroscopy"]
+categories    = ["science", "simulation"]
+# repository = "https://github.com/ORG/nmr-sim"  # TODO: set when the remote exists
+
+# Workspace-wide lints. Kept conservative for bootstrap: forbid unsafe (we
+# have no reason to use it yet) and trust the default clippy groups
+# (correctness / style / suspicious / complexity / perf, all `warn` by
+# default). Pedantic clippy is intentionally *not* enabled workspace-wide —
+# its signal-to-noise on exploratory scientific code is poor. We can opt in
+# per-crate once the public API stabilizes.
+[workspace.lints.rust]
+unsafe_code = "forbid"
+# TODO (future): `missing_docs = "warn"` once the public API has stabilized.
+
+[profile.release]
+lto            = "thin"
+codegen-units  = 1
+debug          = "line-tables-only"  # keeps profiling usable without bloating artifacts
+
+[profile.bench]
+lto            = "thin"
+codegen-units  = 1

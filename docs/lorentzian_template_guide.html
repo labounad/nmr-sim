@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lorentzian Template Interpolation Guide</title>
+<script>
+  window.MathJax = { tex: { inlineMath: [['$','$']], displayMath: [['$$','$$']] } };
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.min.js"></script>
+<style>
+  body {
+    font-family: 'Georgia', serif;
+    max-width: 800px;
+    margin: 40px auto;
+    padding: 0 20px;
+    line-height: 1.7;
+    color: #222;
+    background: #fafafa;
+  }
+  h1 {
+    font-size: 1.8em;
+    border-bottom: 2px solid #333;
+    padding-bottom: 10px;
+    margin-top: 40px;
+  }
+  h2 {
+    font-size: 1.4em;
+    color: #444;
+    margin-top: 35px;
+    border-bottom: 1px solid #ccc;
+    padding-bottom: 5px;
+  }
+  h3 {
+    font-size: 1.15em;
+    color: #555;
+    margin-top: 25px;
+  }
+  img {
+    max-width: 100%;
+    display: block;
+    margin: 20px auto;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+  }
+  .caption {
+    text-align: center;
+    font-style: italic;
+    color: #666;
+    font-size: 0.9em;
+    margin-top: -10px;
+    margin-bottom: 25px;
+  }
+  code {
+    background: #f0f0f0;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 0.9em;
+  }
+  pre {
+    background: #282c34;
+    color: #abb2bf;
+    padding: 16px 20px;
+    border-radius: 6px;
+    overflow-x: auto;
+    font-size: 0.85em;
+    line-height: 1.5;
+  }
+  pre .kw { color: #c678dd; }
+  pre .fn { color: #61afef; }
+  pre .ty { color: #e5c07b; }
+  pre .cm { color: #5c6370; font-style: italic; }
+  pre .num { color: #d19a66; }
+  pre .str { color: #98c379; }
+  .key-insight {
+    background: #e8f4f8;
+    border-left: 4px solid #2196F3;
+    padding: 12px 16px;
+    margin: 20px 0;
+    border-radius: 0 4px 4px 0;
+  }
+  .warning {
+    background: #fff3e0;
+    border-left: 4px solid #ff9800;
+    padding: 12px 16px;
+    margin: 20px 0;
+    border-radius: 0 4px 4px 0;
+  }
+  table {
+    border-collapse: collapse;
+    margin: 20px auto;
+  }
+  th, td {
+    border: 1px solid #ccc;
+    padding: 8px 16px;
+    text-align: center;
+  }
+  th {
+    background: #f0f0f0;
+  }
+  .toc {
+    background: #f5f5f5;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    padding: 15px 25px;
+    margin: 20px 0;
+  }
+  .toc ul { margin: 5px 0; padding-left: 20px; }
+  .toc li { margin: 4px 0; }
+  .toc a { color: #2196F3; text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+
+<h1>Lorentzian Template Interpolation</h1>
+<p style="color:#666; font-size:0.95em;">A guide to efficiently computing Lorentzian lineshapes for NMR spectrum simulation using the arctangent substitution and &theta;-space interpolation.</p>
+
+<div class="toc">
+<strong>Contents</strong>
+<ul>
+  <li><a href="#problem">1. The Problem</a></li>
+  <li><a href="#substitution">2. The Arctangent Substitution</a></li>
+  <li><a href="#sampling">3. Non-Uniform Sampling for Free</a></li>
+  <li><a href="#interpolation">4. Interpolation Quality</a></li>
+  <li><a href="#convergence">5. How Many Points Do You Need?</a></li>
+  <li><a href="#algorithm">6. The Algorithm Step by Step</a></li>
+  <li><a href="#implementation">7. Rust Implementation</a></li>
+</ul>
+</div>
+
+<!-- ============================================ -->
+<h2 id="problem">1. The Problem</h2>
+
+<p>Every peak in an NMR spectrum is described by a Lorentzian lineshape. The <em>standard</em> Lorentzian (centered at zero with unit half-width) is:</p>
+
+$$L(x) = \frac{1}{1 + x^2}$$
+
+<p>where $x$ is a standardized frequency measured in units of half-linewidth from the peak center. Any real NMR peak is just a shifted and scaled version of this universal shape.</p>
+
+<img src="doc_figures/fig1_lorentzian.png" alt="Standard Lorentzian">
+<div class="caption">Figure 1. The standard Lorentzian. Note the sharp central peak and long, slowly-decaying tails.</div>
+
+<p>The challenge for numerical simulation is clear from the shape: the function changes rapidly near $x = 0$ (the peak) but is nearly flat for $|x| > 5$ (the tails). If we try to interpolate this function using uniformly spaced sample points, we face a dilemma. Too few points, and we miss the sharp peak entirely. Enough points to capture the peak, and we waste most of them in the flat tails where nothing interesting happens.</p>
+
+<!-- ============================================ -->
+<h2 id="substitution">2. The Arctangent Substitution</h2>
+
+<p>The key mathematical insight is a change of variables. Let $x = \tan\theta$. Then, using the trigonometric identity $1 + \tan^2\theta = \sec^2\theta$:</p>
+
+$$L(\tan\theta) = \frac{1}{1 + \tan^2\theta} = \frac{1}{\sec^2\theta} = \cos^2\theta$$
+
+<p>This is remarkable: the sharp, hard-to-interpolate Lorentzian in $x$-space becomes the smooth, gentle $\cos^2\theta$ in $\theta$-space.</p>
+
+<img src="doc_figures/fig2_substitution.png" alt="The substitution">
+<div class="caption">Figure 2. Left: the Lorentzian in x-space (sharp peak, long tails). Right: the same function after the substitution x = tan(&theta;), now cos&sup2;(&theta;) &mdash; smooth and slowly varying everywhere.</div>
+
+<div class="key-insight">
+<strong>Key insight:</strong> The difficulty of interpolating the Lorentzian is not intrinsic to the function &mdash; it is an artifact of the coordinate system. In &theta;-space, the Lorentzian is trivially smooth.
+</div>
+
+<p>The inverse transformation is equally simple: given any $x$, we recover $\theta = \arctan(x)$. Since $\arctan$ maps $(-\infty, +\infty) \to (-\pi/2, +\pi/2)$, the entire infinite $x$-axis is compressed into a finite $\theta$ interval.</p>
+
+<!-- ============================================ -->
+<h2 id="sampling">3. Non-Uniform Sampling for Free</h2>
+
+<p>Here is where the substitution becomes practically powerful. We sample $\theta$ <em>uniformly</em> in the interval $[-\theta_{\max}, +\theta_{\max}]$ (with $\theta_{\max}$ slightly less than $\pi/2$). At each $\theta_i$, we store the value $\cos^2(\theta_i)$. This is our <strong>template</strong> &mdash; just a list of numbers.</p>
+
+<p>But when we map these uniform $\theta$ points back to $x$-space via $x_i = \tan(\theta_i)$, something interesting happens:</p>
+
+<img src="doc_figures/fig3_point_placement.png" alt="Point placement">
+<div class="caption">Figure 3. Left: 30 uniformly spaced points in &theta;-space. Right: the same points mapped to x-space via x = tan(&theta;). They cluster densely near x = 0 (the peak) and spread apart in the tails.</div>
+
+<p>The $\tan$ function is slowly varying near $\theta = 0$ and rapidly increasing near $\pm\pi/2$. So uniform $\theta$ spacing automatically produces <strong>dense sampling near the peak and sparse sampling in the tails</strong> &mdash; exactly the distribution we want, without any explicit design effort.</p>
+
+<p>This is not a coincidence. The density of sample points in $x$-space is proportional to $d\theta/dx = 1/(1+x^2) = L(x)$ itself. The sampling density matches the function's shape &mdash; the mathematical structure of the Lorentzian generates its own optimal sampling scheme.</p>
+
+<!-- ============================================ -->
+<h2 id="interpolation">4. Interpolation Quality</h2>
+
+<p>The practical payoff is in how well we can reconstruct the Lorentzian from a small number of stored values. We compare two approaches:</p>
+
+<ol>
+<li><strong>&theta;-space interpolation (green):</strong> Store $\cos^2(\theta_i)$ at uniform $\theta$ points. To evaluate at a new $x$, compute $\theta = \arctan(x)$, then linearly interpolate in the uniform $\theta$ grid.</li>
+<li><strong>$x$-space interpolation (red):</strong> Store $L(x_i)$ at the same (non-uniform) $x$ points. To evaluate at a new $x$, linearly interpolate directly in $x$-space.</li>
+</ol>
+
+<img src="doc_figures/fig4_interpolation_quality.png" alt="Interpolation quality comparison">
+<div class="caption">Figure 4. Interpolation quality at 10, 20, 50, and 100 template points. Green (&theta;-space) closely tracks the true Lorentzian (black) at all scales. Red (x-space) consistently overshoots or undershoots the peak.</div>
+
+<p>The &theta;-space approach wins dramatically, especially at low point counts. With just 20 points, &theta;-space interpolation achieves 0.6% max error, while $x$-space interpolation is still at 3%. The advantage comes from interpolating $\cos^2\theta$ (a gentle curve) rather than $1/(1+x^2)$ (a sharp spike).</p>
+
+<!-- ============================================ -->
+<h2 id="convergence">5. How Many Points Do You Need?</h2>
+
+<img src="doc_figures/fig5_convergence.png" alt="Convergence plot">
+<div class="caption">Figure 5. Maximum interpolation error vs. number of template points. The &theta;-space approach (green) converges roughly as O(1/n&sup2;), reaching 0.1% error at ~50 points.</div>
+
+<table>
+  <tr><th>Template points</th><th>&theta;-space max error</th><th>$x$-space max error</th></tr>
+  <tr><td>10</td><td>2.8 &times; 10<sup>&minus;2</sup></td><td>5.0 &times; 10<sup>&minus;2</sup></td></tr>
+  <tr><td>20</td><td>6.2 &times; 10<sup>&minus;3</sup></td><td>1.7 &times; 10<sup>&minus;2</sup></td></tr>
+  <tr><td>50</td><td>9.4 &times; 10<sup>&minus;4</sup></td><td>2.8 &times; 10<sup>&minus;3</sup></td></tr>
+  <tr><td>100</td><td>2.3 &times; 10<sup>&minus;4</sup></td><td>6.8 &times; 10<sup>&minus;4</sup></td></tr>
+  <tr><td>1000</td><td>2.3 &times; 10<sup>&minus;6</sup></td><td>6.9 &times; 10<sup>&minus;6</sup></td></tr>
+</table>
+
+<div class="key-insight">
+<strong>Practical recommendation:</strong> 100 template points give 0.02% maximum error &mdash; more than sufficient for any NMR simulation. For quick-and-dirty calculations, even 50 points (0.1% error) are adequate.
+</div>
+
+<p>The convergence rate is $O(1/n^2)$, characteristic of linear interpolation on a smooth function. Higher-order interpolation (cubic splines) would converge faster, but linear interpolation in $\theta$-space is already so accurate that the added complexity is unnecessary.</p>
+
+<!-- ============================================ -->
+<h2 id="algorithm">6. The Algorithm Step by Step</h2>
+
+<p>Given a query point $x$ (a standardized frequency), the evaluation algorithm is:</p>
+
+<h3>Step 1: Convert to &theta;-space</h3>
+<p>Compute $\theta = \arctan(x)$. This maps any real number to the interval $(-\pi/2, +\pi/2)$.</p>
+
+<h3>Step 2: Find neighbors in the uniform grid</h3>
+<p>The template stores $\cos^2(\theta_i)$ at $n$ uniformly spaced $\theta$ values from $-\theta_{\max}$ to $+\theta_{\max}$. Map $\theta$ to a floating-point index:</p>
+$$t = \frac{\theta + \theta_{\max}}{2\,\theta_{\max}} \cdot (n - 1)$$
+<p>The integer part $i = \lfloor t \rfloor$ gives the left neighbor; $i+1$ is the right neighbor.</p>
+
+<h3>Step 3: Linearly interpolate</h3>
+<p>With $f = t - i$ as the fractional part:</p>
+$$\text{result} = (1 - f) \cdot \cos^2(\theta_i) \;+\; f \cdot \cos^2(\theta_{i+1})$$
+
+<img src="doc_figures/fig6_algorithm.png" alt="Algorithm visualization">
+<div class="caption">Figure 6. Left: in &theta;-space, we find the two grid points bracketing our query &theta; and linearly interpolate between their cos&sup2; values. Right: mapped back to x-space, the interpolated value (blue star) closely matches the true Lorentzian (red &times;).</div>
+
+<h3>Applying to a real NMR peak</h3>
+<p>For a peak with center frequency $\nu_0$ (Hz), half-linewidth $\gamma$ (Hz), and peak height $I$, the Lorentzian at frequency $\nu$ is:</p>
+
+$$L(\nu) = I \cdot L_{\text{standard}}\!\left(\frac{\nu - \nu_0}{\gamma}\right)$$
+
+<p>So to evaluate using the template: (1) compute $x = (\nu - \nu_0)/\gamma$, (2) call the template's evaluate function to get $L_{\text{standard}}(x)$, (3) multiply by the peak height $I$.</p>
+
+<div class="warning">
+<strong>Tail cutoff:</strong> If $|\theta| \geq \theta_{\max}$ (equivalently, $|x| \geq \tan(\theta_{\max})$), the function returns 0. With $\theta_{\max} = 1.5$, this cutoff is at $|x| \approx 14.1$ half-linewidths from center, where the Lorentzian is less than 0.5% of its peak value. This early-return is also the main performance optimization &mdash; most grid points are far from any given peak and can be skipped entirely.
+</div>
+
+<!-- ============================================ -->
+<h2 id="implementation">7. Rust Implementation</h2>
+
+<p>The template is implemented as a struct with four fields:</p>
+
+<pre>
+<span class="kw">pub struct</span> <span class="ty">LorentzianTemplate</span> {
+    cos2_values: <span class="ty">Vec</span>&lt;<span class="ty">f64</span>&gt;,  <span class="cm">// pre-computed cos²(θ) at each grid point</span>
+    theta_max: <span class="ty">f64</span>,          <span class="cm">// cutoff angle</span>
+    num_points: <span class="ty">usize</span>,       <span class="cm">// number of sample points</span>
+    x_max: <span class="ty">f64</span>,             <span class="cm">// tan(theta_max) — cutoff in x-space</span>
+}
+</pre>
+
+<p>The constructor pre-computes the template once:</p>
+
+<pre>
+<span class="kw">pub fn</span> <span class="fn">new</span>(num_points: <span class="ty">usize</span>, theta_max: <span class="ty">f64</span>) -> <span class="ty">LorentzianTemplate</span> {
+    <span class="kw">let</span> step = <span class="num">2.0</span> * theta_max / (num_points <span class="kw">as</span> <span class="ty">f64</span> - <span class="num">1.0</span>);
+
+    <span class="kw">let</span> cos2_values: <span class="ty">Vec</span>&lt;<span class="ty">f64</span>&gt; = (<span class="num">0</span>..num_points)
+        .<span class="fn">map</span>(|i| {
+            <span class="kw">let</span> theta = -theta_max + i <span class="kw">as</span> <span class="ty">f64</span> * step;
+            theta.<span class="fn">cos</span>().<span class="fn">powi</span>(<span class="num">2</span>)
+        })
+        .<span class="fn">collect</span>();
+
+    <span class="kw">let</span> x_max = theta_max.<span class="fn">tan</span>();
+
+    <span class="ty">LorentzianTemplate</span> { cos2_values, theta_max, num_points, x_max }
+}
+</pre>
+
+<p>And the core evaluation method performs the three-step algorithm described above:</p>
+
+<pre>
+<span class="kw">pub fn</span> <span class="fn">evaluate</span>(&amp;self, x: <span class="ty">f64</span>) -> <span class="ty">f64</span> {
+    <span class="cm">// Step 1: convert to θ-space</span>
+    <span class="kw">let</span> theta = x.<span class="fn">atan</span>();
+
+    <span class="cm">// Beyond cutoff — negligible contribution</span>
+    <span class="kw">if</span> theta.<span class="fn">abs</span>() >= self.theta_max {
+        <span class="kw">return</span> <span class="num">0.0</span>;
+    }
+
+    <span class="cm">// Step 2: map θ to index space [0, num_points - 1]</span>
+    <span class="kw">let</span> t = (theta + self.theta_max) / (<span class="num">2.0</span> * self.theta_max)
+        * (self.num_points <span class="kw">as</span> <span class="ty">f64</span> - <span class="num">1.0</span>);
+
+    <span class="kw">let</span> i = t.<span class="fn">floor</span>() <span class="kw">as</span> <span class="ty">usize</span>;
+    <span class="kw">if</span> i >= self.num_points - <span class="num">1</span> {
+        <span class="kw">return</span> self.cos2_values[self.num_points - <span class="num">1</span>];
+    }
+
+    <span class="cm">// Step 3: linear interpolation</span>
+    <span class="kw">let</span> frac = t - i <span class="kw">as</span> <span class="ty">f64</span>;
+    self.cos2_values[i] * (<span class="num">1.0</span> - frac) + self.cos2_values[i + <span class="num">1</span>] * frac
+}
+</pre>
+
+</body>
+</html>
