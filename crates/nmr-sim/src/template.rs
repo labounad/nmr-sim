@@ -15,10 +15,10 @@ use crate::peak::Peak;
 
 #[derive(Debug)]
 pub struct LorentzianTemplate {
-    cos2_values: Vec<f64>,  // pre-computed cos²(θ) at each grid point
-    theta_max: f64,         // cutoff angle — beyond this we return 0
-    num_points: usize,      // number of sample points
-    x_max: f64,             // tan(theta_max) — cutoff in x-space
+    cos2_values: Vec<f64>, // pre-computed cos²(θ) at each grid point
+    theta_max: f64,        // cutoff angle — beyond this we return 0
+    num_points: usize,     // number of sample points
+    x_max: f64,            // tan(theta_max) — cutoff in x-space
 }
 
 impl LorentzianTemplate {
@@ -39,7 +39,12 @@ impl LorentzianTemplate {
 
         let x_max = theta_max.tan();
 
-        LorentzianTemplate { cos2_values, theta_max, num_points, x_max }
+        LorentzianTemplate {
+            cos2_values,
+            theta_max,
+            num_points,
+            x_max,
+        }
     }
 
     /// Evaluate the standard Lorentzian at x via interpolation in θ-space.
@@ -56,8 +61,7 @@ impl LorentzianTemplate {
         }
 
         // Map θ from [-theta_max, theta_max] to index space [0, num_points - 1]
-        let t = (theta + self.theta_max) / (2.0 * self.theta_max)
-            * (self.num_points as f64 - 1.0);
+        let t = (theta + self.theta_max) / (2.0 * self.theta_max) * (self.num_points as f64 - 1.0);
 
         // Linear interpolation between the two nearest grid points
         let i = t.floor() as usize;

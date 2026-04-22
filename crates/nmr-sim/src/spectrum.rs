@@ -6,7 +6,7 @@ use crate::template::LorentzianTemplate;
 
 // Sensible defaults for template configuration
 const DEFAULT_TEMPLATE_POINTS: usize = 100;
-const DEFAULT_THETA_MAX: f64 = 1.55;  // PI/2 ~ 1.57
+const DEFAULT_THETA_MAX: f64 = 1.55; // PI/2 ~ 1.57
 const DEFAULT_NUM_POINTS: usize = 200_000;
 
 #[derive(Debug)]
@@ -64,25 +64,28 @@ impl Spectrum {
             .map(|i| start_hz + i as f64 * step_size)
             .collect();
 
-        freq_grid.iter().map(|&freq| {
-            let intensity: f64 = self.peaks
-                .iter()
-                .map(|peak| template.evaluate_peak(peak, freq, self.spectrometer_freq))
-                .sum();
-            (freq, intensity)
-        }).collect()
+        freq_grid
+            .iter()
+            .map(|&freq| {
+                let intensity: f64 = self
+                    .peaks
+                    .iter()
+                    .map(|peak| template.evaluate_peak(peak, freq, self.spectrometer_freq))
+                    .sum();
+                (freq, intensity)
+            })
+            .collect()
     }
 
     pub fn to_csv(&self, filename: &str) -> Result<(), String> {
         let data = self.compute();
-        let mut file = File::create(filename)
-            .map_err(|e| format!("Could not create file: {}", e))?;
+        let mut file =
+            File::create(filename).map_err(|e| format!("Could not create file: {}", e))?;
         writeln!(file, "chemical_shift_ppm,intensity")
             .map_err(|e| format!("Write error: {}", e))?;
         for (freq_hz, intensity) in &data {
             let ppm = freq_hz / self.spectrometer_freq;
-            writeln!(file, "{},{}", ppm, intensity)
-                .map_err(|e| format!("Write error: {}", e))?;
+            writeln!(file, "{},{}", ppm, intensity).map_err(|e| format!("Write error: {}", e))?;
         }
         Ok(())
     }

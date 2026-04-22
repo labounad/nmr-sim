@@ -23,7 +23,8 @@ authors       = ["Lucas Labounader <labounader@scripps.edu>", "nmr-sim contribut
 readme        = "README.md"
 keywords      = ["nmr", "spin-dynamics", "simulation", "chemistry", "spectroscopy"]
 categories    = ["science", "simulation"]
-# repository = "https://github.com/ORG/nmr-sim"  # TODO: set when the remote exists
+repository    = "https://github.com/labounad/nmr-sim"
+homepage      = "https://github.com/labounad/nmr-sim"
 
 # Workspace-wide lints. Kept conservative for bootstrap: forbid unsafe (we
 # have no reason to use it yet) and trust the default clippy groups

@@ -118,8 +118,14 @@ mod tests {
             area: 6.0,
             linewidth: 1.0,
             couplings: vec![
-                Coupling { j_hz: 7.0, n_neighbors: 3 },
-                Coupling { j_hz: 5.0, n_neighbors: 2 },
+                Coupling {
+                    j_hz: 7.0,
+                    n_neighbors: 3,
+                },
+                Coupling {
+                    j_hz: 5.0,
+                    n_neighbors: 2,
+                },
             ],
         };
         let peaks = def.expand(600.0);
@@ -129,7 +135,12 @@ mod tests {
 
     #[test]
     fn peak_def_without_couplings_yields_one_peak() {
-        let def = PeakDef { shift: 2.0, area: 3.0, linewidth: 0.5, couplings: vec![] };
+        let def = PeakDef {
+            shift: 2.0,
+            area: 3.0,
+            linewidth: 0.5,
+            couplings: vec![],
+        };
         let peaks = def.expand(500.0);
         assert_eq!(peaks.len(), 1);
         assert_eq!(peaks[0].shift, 2.0);

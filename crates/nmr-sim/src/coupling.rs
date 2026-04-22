@@ -1,4 +1,4 @@
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Coupling {
     pub j_hz: f64,
     pub n_neighbors: usize,
@@ -85,7 +85,10 @@ mod tests {
     #[test]
     fn test_expand_doublet() {
         // 1 neighbor → doublet, two equal sub-peaks
-        let couplings = vec![Coupling { j_hz: 6.0, n_neighbors: 1 }];
+        let couplings = vec![Coupling {
+            j_hz: 6.0,
+            n_neighbors: 1,
+        }];
         let result = expand_peak(1.0, 2.0, &couplings, 600.0);
         assert_eq!(result.len(), 2);
         // Each sub-peak gets half the area
@@ -99,7 +102,10 @@ mod tests {
     #[test]
     fn test_expand_triplet() {
         // 2 neighbors → triplet with 1:2:1 pattern
-        let couplings = vec![Coupling { j_hz: 6.0, n_neighbors: 2 }];
+        let couplings = vec![Coupling {
+            j_hz: 6.0,
+            n_neighbors: 2,
+        }];
         let result = expand_peak(5.0, 4.0, &couplings, 600.0);
         assert_eq!(result.len(), 3);
         // Areas should be 1:2:1 scaled to total area 4.0
@@ -112,8 +118,14 @@ mod tests {
     fn test_area_conserved() {
         // Total area should be preserved through any splitting
         let couplings = vec![
-            Coupling { j_hz: 7.0, n_neighbors: 3 },
-            Coupling { j_hz: 5.0, n_neighbors: 2 },
+            Coupling {
+                j_hz: 7.0,
+                n_neighbors: 3,
+            },
+            Coupling {
+                j_hz: 5.0,
+                n_neighbors: 2,
+            },
         ];
         let result = expand_peak(3.0, 10.0, &couplings, 600.0);
         let total_area: f64 = result.iter().map(|(_, a)| a).sum();
