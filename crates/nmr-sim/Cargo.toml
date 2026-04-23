@@ -23,6 +23,11 @@ num-complex = "0.4"
 # For now, default features are enough — we only need allocation + basic ops.
 nalgebra = "0.33"
 
+# FFT. rustfft is the de-facto pure-Rust FFT crate. Needed for turning an FID
+# (time-domain complex signal) into a frequency-domain spectrum. Pure Rust,
+# no system dependencies, MSRV-compatible with 1.75.
+rustfft = "6"
+
 # Future deps (kept as comments so we remember the plan):
 # - nalgebra-lapack     # complex Hermitian eigendecomposition (needs system BLAS)
 # - rayon               # parallelism for powder-average / ensemble sampling

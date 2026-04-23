@@ -7,33 +7,72 @@
 //! Larmor frequencies on the diagonal and destroy the interesting physics to
 //! roundoff. See `docs/architecture.md` for the convention.
 //!
+//! # The `Hamiltonian` trait shape
+//!
+//! The trait exposes two views of the underlying operator:
+//!
+//! - [`as_dense`](Hamiltonian::as_dense): a full `D×D` dense matrix.
+//!   Always available; the universal fallback.
+//! - [`try_as_diagonal`](Hamiltonian::try_as_diagonal): the diagonal of H as
+//!   a real `DVector<f64>`, if the Hamiltonian is stored diagonally in the
+//!   product-Iz basis. Returns `None` by default.
+//!
+//! This split lets propagators specialize without paying for diagonality
+//! detection on every construction. A [`DiagonalPropagator`](crate::propagator::DiagonalPropagator)
+//! asks `try_as_diagonal` and either gets the data it needs in O(D) memory
+//! or refuses the job up-front. A general [`MatrixPropagator`](crate::propagator::MatrixPropagator)
+//! always calls `as_dense` and pays the O(D²) cost.
+//!
 //! # Current implementations
 //!
 //! - [`ZeemanH`]: isotropic chemical-shift (rotating-frame Zeeman) Hamiltonian.
+//!   Diagonal in the product-Iz basis; stored as `DVector<f64>`.
 //!
 //! # Planned next
 //!
-//! - `JCouplingH`: isotropic scalar coupling Σᵢ<ⱼ 2π J_{ij} Îᵢ·Îⱼ.
+//! - `JCouplingH`: isotropic scalar coupling Σᵢ<ⱼ 2π J_{ij} Îᵢ·Îⱼ. Non-diagonal
+//!   in the product-Iz basis (flip-flop terms); will implement `as_dense` but
+//!   not `try_as_diagonal`.
 //! - `DipolarH`: direct dipolar coupling with orientation dependence.
 //! - `RfPulseH`: time-dependent RF irradiation (requires extending the trait).
 
 use crate::operator::{iz_at, Operator};
 use crate::spin::SpinSystem;
+use nalgebra::DVector;
 use num_complex::Complex;
 
-/// A Hamiltonian exposes its matrix representation in rad/s.
+/// A Hamiltonian over a finite-dimensional Hilbert space, in rad/s.
 ///
-/// For static (time-independent) Hamiltonians, implementors typically store
-/// the precomputed matrix and just hand out a reference. Time-dependent
-/// Hamiltonians (future extensions) will supply a richer interface layered
-/// on top of this trait.
+/// Implementors expose a universal dense view via [`as_dense`](Self::as_dense)
+/// and may optionally advertise structured storage via
+/// [`try_as_diagonal`](Self::try_as_diagonal). More structured views
+/// (e.g. `try_as_sparse`, `try_as_kronecker`) may be added in future
+/// milestones; each is an optional fast path that a propagator can opt into.
 pub trait Hamiltonian {
-    /// The matrix representation of this Hamiltonian, in rad/s.
-    fn matrix(&self) -> &Operator;
+    /// Hilbert-space dimension (D = ∏ᵢ (2Iᵢ + 1) for a product system).
+    fn dim(&self) -> usize;
 
-    /// Hilbert-space dimension. Defaults to the matrix's row count.
-    fn dim(&self) -> usize {
-        self.matrix().nrows()
+    /// A dense `D×D` matrix representation in rad/s.
+    ///
+    /// Returned by value because implementors that store their Hamiltonian in
+    /// a structured form (diagonal, sparse, matrix-free, …) materialize the
+    /// dense matrix on demand and do not retain it. Callers that need the
+    /// dense matrix repeatedly should hold onto the returned value themselves.
+    fn as_dense(&self) -> Operator;
+
+    /// If this Hamiltonian is diagonal in its storage basis, return a
+    /// borrowed view of the real diagonal `DVector<f64>`; otherwise `None`.
+    ///
+    /// The diagonal is real because any Hermitian matrix has real diagonal
+    /// entries, and any *diagonally stored* Hamiltonian is necessarily
+    /// Hermitian in that basis.
+    ///
+    /// Default implementation returns `None` — i.e. implementors must opt in
+    /// to advertising diagonal storage. A `Some` return is a claim by the
+    /// implementor that the operator is *exactly* diagonal, not merely
+    /// approximately so.
+    fn try_as_diagonal(&self) -> Option<&DVector<f64>> {
+        None
     }
 }
 
@@ -45,7 +84,9 @@ pub trait Hamiltonian {
 ///
 /// The bare-isotope Larmor frequencies are absorbed into each isotope's
 /// rotating-frame reference, leaving only the chemical-shift offsets Δωᵢ
-/// on the diagonal. The result is diagonal in the product-Iz basis.
+/// on the diagonal. The result is diagonal in the product-Iz basis, so this
+/// implementation stores only the diagonal as a `DVector<f64>` — `2^N` reals
+/// for an N-spin-1/2 system, not `4^N` complex numbers.
 ///
 /// For a homonuclear system, this is the standard "offsets only" Zeeman
 /// term. For heteronuclear systems, each isotope is implicitly in its own
@@ -53,17 +94,23 @@ pub trait Hamiltonian {
 /// between heteronuclei are added (they bring in the secular approximation).
 #[derive(Debug, Clone)]
 pub struct ZeemanH {
-    matrix: Operator,
+    /// Real diagonal in rad/s.
+    diagonal: DVector<f64>,
 }
 
 impl ZeemanH {
     /// Build the rotating-frame Zeeman Hamiltonian for `sys`.
     ///
-    /// O(N · D²) in time and O(D²) in memory, where N is the number of
-    /// spins and D = ∏ᵢ (2Iᵢ + 1) is the full Hilbert-space dimension.
+    /// Time cost is O(N · D²) because we still reuse the generic `iz_at`
+    /// single-site lift to extract per-spin diagonals — this materializes a
+    /// D×D temporary per spin but only the diagonal survives. A future
+    /// specialization can compute each Îz,ᵢ diagonal directly in O(D)
+    /// without the temporary; that optimization is deferred because it
+    /// requires mixed-radix index bookkeeping and we want this refactor to
+    /// be a behavior-preserving step.
     pub fn new(sys: &SpinSystem) -> Self {
         let dim = sys.dim() as usize;
-        let mut matrix = Operator::zeros(dim, dim);
+        let mut diagonal = DVector::<f64>::zeros(dim);
         for (i, spin) in sys.spins.iter().enumerate() {
             let omega = spin.shift_angular(sys.b0_tesla);
             // Skip spins at zero shift — their contribution is exactly zero
@@ -73,15 +120,36 @@ impl ZeemanH {
                 continue;
             }
             let iz_i = iz_at(sys, i);
-            matrix += iz_i.map(|x| x * Complex::new(omega, 0.0));
+            for k in 0..dim {
+                diagonal[k] += omega * iz_i[(k, k)].re;
+            }
         }
-        Self { matrix }
+        Self { diagonal }
+    }
+
+    /// Borrow the real diagonal directly. Equivalent to
+    /// `self.try_as_diagonal().unwrap()` but statically infallible.
+    pub fn diagonal(&self) -> &DVector<f64> {
+        &self.diagonal
     }
 }
 
 impl Hamiltonian for ZeemanH {
-    fn matrix(&self) -> &Operator {
-        &self.matrix
+    fn dim(&self) -> usize {
+        self.diagonal.len()
+    }
+
+    fn as_dense(&self) -> Operator {
+        let n = self.diagonal.len();
+        let mut m = Operator::zeros(n, n);
+        for k in 0..n {
+            m[(k, k)] = Complex::new(self.diagonal[k], 0.0);
+        }
+        m
+    }
+
+    fn try_as_diagonal(&self) -> Option<&DVector<f64>> {
+        Some(&self.diagonal)
     }
 }
 
@@ -106,17 +174,19 @@ mod tests {
         // exactly zero — by construction, Δωᵢ = 0 for each spin.
         let sys = two_protons([0.0, 0.0]);
         let h = ZeemanH::new(&sys);
-        assert_eq!(h.matrix().shape(), (4, 4));
-        for x in h.matrix().iter() {
-            assert!(x.norm() < 1e-12);
+        assert_eq!(h.dim(), 4);
+        let diag = h.try_as_diagonal().expect("ZeemanH is diagonal");
+        for &x in diag.iter() {
+            assert!(x.abs() < 1e-12);
         }
     }
 
     #[test]
-    fn zeeman_is_diagonal_in_product_basis() {
+    fn zeeman_dense_form_is_diagonal() {
+        // The dense reconstruction is, by construction, diagonal. Verify.
         let sys = two_protons([1.0, 5.0]);
         let h = ZeemanH::new(&sys);
-        let m = h.matrix();
+        let m = h.as_dense();
         for i in 0..4 {
             for j in 0..4 {
                 if i != j {
@@ -132,10 +202,11 @@ mod tests {
 
     #[test]
     fn zeeman_is_hermitian() {
-        // H = H†, so elementwise we should have H[i,j] = conj(H[j,i]).
+        // A real-diagonal operator is trivially Hermitian. Verify via the
+        // dense reconstruction.
         let sys = two_protons([1.0, 5.0]);
         let h = ZeemanH::new(&sys);
-        let m = h.matrix();
+        let m = h.as_dense();
         for i in 0..m.nrows() {
             for j in 0..m.ncols() {
                 let diff = m[(i, j)] - m[(j, i)].conj();
@@ -149,9 +220,8 @@ mod tests {
         // ∑ₘ m = 0 for any Iz representation → every Σᵢ Δωᵢ Îz,ᵢ is traceless.
         let sys = two_protons([1.0, 5.0]);
         let h = ZeemanH::new(&sys);
-        let m = h.matrix();
-        let tr: Complex<f64> = (0..m.nrows()).map(|i| m[(i, i)]).sum();
-        assert!(tr.norm() < 1e-10, "trace = {tr:?} should be 0");
+        let tr: f64 = h.diagonal().iter().sum();
+        assert!(tr.abs() < 1e-10, "trace = {tr} should be 0");
     }
 
     #[test]
@@ -170,7 +240,7 @@ mod tests {
         let d2 = s2.shift_angular(b0);
         let sys = SpinSystem::new(vec![s1, s2], b0);
         let h = ZeemanH::new(&sys);
-        let m = h.matrix();
+        let diag = h.diagonal();
 
         let expected = [
             0.5 * d1 + 0.5 * d2,
@@ -180,12 +250,11 @@ mod tests {
         ];
         for (i, &e) in expected.iter().enumerate() {
             assert!(
-                (m[(i, i)].re - e).abs() < 1e-6,
+                (diag[i] - e).abs() < 1e-6,
                 "diagonal[{i}]: got {}, expected {}",
-                m[(i, i)].re,
+                diag[i],
                 e,
             );
-            assert!(m[(i, i)].im.abs() < 1e-12);
         }
     }
 
@@ -202,7 +271,7 @@ mod tests {
         let d_c = c_spin.shift_angular(b0);
         let sys = SpinSystem::new(vec![h_spin, c_spin], b0);
         let h = ZeemanH::new(&sys);
-        let m = h.matrix();
+        let diag = h.diagonal();
 
         let expected = [
             0.5 * d_h + 0.5 * d_c,
@@ -211,7 +280,7 @@ mod tests {
             -0.5 * d_h - 0.5 * d_c,
         ];
         for (i, &e) in expected.iter().enumerate() {
-            assert!((m[(i, i)].re - e).abs() < 1e-6);
+            assert!((diag[i] - e).abs() < 1e-6);
         }
     }
 
@@ -228,5 +297,20 @@ mod tests {
         let h: Box<dyn Hamiltonian> = Box::new(ZeemanH::new(&sys));
         // Three spin-1/2's → 2³ = 8.
         assert_eq!(h.dim(), 8);
+    }
+
+    #[test]
+    fn zeeman_try_as_diagonal_matches_as_dense_diagonal() {
+        // The diagonal advertised by `try_as_diagonal` must match the
+        // diagonal of the dense reconstruction exactly — same data, two
+        // views. Guards against drift if either code path is changed.
+        let sys = two_protons([1.5, 4.0]);
+        let h = ZeemanH::new(&sys);
+        let diag = h.try_as_diagonal().unwrap();
+        let m = h.as_dense();
+        for k in 0..h.dim() {
+            assert!((diag[k] - m[(k, k)].re).abs() < 1e-12);
+            assert!(m[(k, k)].im.abs() < 1e-12);
+        }
     }
 }

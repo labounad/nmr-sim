@@ -25,3 +25,5 @@ venv/
 /spectrum.png
 /accuracy_test.png
 /template_explanation.png
+# Quantum-engine example outputs (zeeman_1h_spectrum.csv, future ibuprofen_1h_spectrum.csv, etc.).
+/*_spectrum.csv

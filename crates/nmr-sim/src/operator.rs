@@ -203,6 +203,39 @@ pub fn iminus_at(sys: &SpinSystem, site: usize) -> Operator {
 }
 
 // ============================================================================
+// Total-spin observables
+// ============================================================================
+
+/// Total raising operator M⁺ = Σᵢ Î₊,i across every spin in the system.
+///
+/// Most NMR FIDs are computed against [`total_m_minus`] instead — see that
+/// function for why. `M⁺` is provided for completeness (and for adjoint
+/// checks: `M⁺ = (M⁻)†`).
+pub fn total_m_plus(sys: &SpinSystem) -> Operator {
+    let dim = sys.dim() as usize;
+    let mut m = Operator::zeros(dim, dim);
+    for i in 0..sys.len() {
+        m += iplus_at(sys, i);
+    }
+    m
+}
+
+/// Total lowering operator M⁻ = Σᵢ Î₋,i = Σᵢ (Îx,i − i·Îy,i) across every spin.
+///
+/// This is the standard complex-FID observable in NMR: taking
+/// `s(t) = Tr[M⁻ · ρ(t)]` gives a signal that oscillates as e^{-iΔωt} for
+/// each spin, so the Fourier transform places peaks at positive Δω (and
+/// therefore at the positive chemical-shift offsets we expect on a ppm axis).
+pub fn total_m_minus(sys: &SpinSystem) -> Operator {
+    let dim = sys.dim() as usize;
+    let mut m = Operator::zeros(dim, dim);
+    for i in 0..sys.len() {
+        m += iminus_at(sys, i);
+    }
+    m
+}
+
+// ============================================================================
 // Tests
 // ============================================================================
 

@@ -63,13 +63,21 @@ pub use spectrum::Spectrum;
 pub use template::LorentzianTemplate;
 
 // --- Quantum engine (M1+): spin systems, operators, Hamiltonians. ---
+pub mod discrete_spectrum;
+pub mod fid;
 pub mod hamiltonian;
 pub mod operator;
+pub mod propagator;
 pub mod spin;
+pub mod state;
 
+pub use discrete_spectrum::DiscreteSpectrum;
+pub use fid::{compute_fid, trace_product};
 pub use hamiltonian::{Hamiltonian, ZeemanH};
 pub use operator::Operator;
+pub use propagator::{DiagonalPropagator, MatrixPropagator, Propagator};
 pub use spin::{Isotope, Spin, SpinSystem};
+pub use state::{thermal_x_state, DensityMatrix};
 
 /// A chemically-distinct NMR signal before J-coupling is expanded into
 /// sub-peaks.
