@@ -73,7 +73,7 @@ pub mod state;
 
 pub use discrete_spectrum::DiscreteSpectrum;
 pub use fid::{compute_fid, trace_product};
-pub use hamiltonian::{Hamiltonian, ZeemanH};
+pub use hamiltonian::{Hamiltonian, JCouplingH, SumH, ZeemanH};
 pub use operator::Operator;
 pub use propagator::{DiagonalPropagator, MatrixPropagator, Propagator};
 pub use spin::{Isotope, Spin, SpinSystem};

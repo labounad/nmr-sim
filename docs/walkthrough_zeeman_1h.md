@@ -587,12 +587,14 @@ Dense $D \times D$ matrices work fine up to ~10 spin-1/2's (1024×1024 is ~16 MB
 
 ---
 
-## 11. What's next
+## 11. What comes next
 
-The same pipeline, unchanged below `ZeemanH`, should handle J-couplings once we can make a non-diagonal Hamiltonian. Two milestones:
+Both milestones that this doc originally flagged as "next" have now shipped:
 
-- **M2b — trait-based propagation cleanup.** Add `EigenbasisPropagator` (diagonalize $H$ once, transform $\rho$ into the eigenbasis, propagate elementwise, transform back for each detection) or a Krylov variant. `DiagonalPropagator` stays as the fast path for pure Zeeman.
+- **M2b — `MatrixPropagator`.** Implemented. It's the universal `O(D^3)` apply / `O(D^2)` storage fallback built on `nalgebra`'s scaling-and-squaring Padé matrix exponential, and it kicks in automatically for any `Hamiltonian` that returns `None` from `try_as_diagonal`.
 
-- **M3 — J-coupling.** Add `JCouplingH` with terms $2\pi J_{ij} \hat I_i \cdot \hat I_j = 2\pi J_{ij} (\hat I_{x,i} \hat I_{x,j} + \hat I_{y,i} \hat I_{y,j} + \hat I_{z,i} \hat I_{z,j})$. The first two terms are off-diagonal — they're exactly what breaks `DiagonalPropagator`. Hence the ordering: M2b first, so M3 has a propagator to plug into.
+- **M3 — J-coupling.** Implemented via `JCouplingH` (full isotropic $2\pi J_{ij}\,\hat I_i\!\cdot\!\hat I_j$) and a `SumH` combinator so that `H = H_Z + H_J + \dots$ composes naturally through the `Hamiltonian` trait. Because `JCouplingH` doesn't advertise diagonal storage, any `SumH` that contains one routes through `MatrixPropagator` automatically — no caller-side changes.
 
-Everything above `ZeemanH` in the pipeline — `compute_fid`, `DiscreteSpectrum`, the CSV output — will not change. That's the point of the trait layering.
+See [`walkthrough_ab_system_1h.md`](walkthrough_ab_system_1h.md) for the M3 companion walkthrough: the same pipeline below `SumH`, but with the non-diagonal $\hat I_i\!\cdot\!\hat I_j$ Hamiltonian producing a real AB quartet with roofing — and collapsing into first-order doublets as $B_0$ increases. Everything in the current doc above `ZeemanH` (`compute_fid`, `DiscreteSpectrum`, CSV output) is shared between the two examples and does not change. That's the point of the trait layering.
+
+Roadmap past M3 lives in `docs/architecture.md`; the near-term menu includes sparse/Krylov/restricted-basis propagator specializations, relaxation (Redfield/Lindblad) as new `Hamiltonian`/superoperator terms, and heteronuclear secular handling in `JCouplingH`.
