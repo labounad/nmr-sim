@@ -164,10 +164,10 @@ impl Propagator for DiagonalPropagator {
 /// # How it works
 ///
 /// We form the antihermitian matrix `A = −i H Δt` and compute `U = exp(A)`
-/// via [`nalgebra::Matrix::exp`], which uses scaling-and-squaring with Padé
-/// approximation. For Hermitian `H`, `A` is antihermitian and `exp(A)` is
-/// unitary to machine precision. The cached adjoint `U†` is stored alongside
-/// `U` to avoid recomputing it per [`apply`](Propagator::apply).
+/// via nalgebra's `Matrix::exp` method, which uses scaling-and-squaring with
+/// Padé approximation. For Hermitian `H`, `A` is antihermitian and `exp(A)`
+/// is unitary to machine precision. The cached adjoint `U†` is stored
+/// alongside `U` to avoid recomputing it per [`apply`](Propagator::apply).
 ///
 /// # When to use
 ///

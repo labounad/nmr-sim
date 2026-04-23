@@ -16,8 +16,8 @@
 //! After [`DiscreteSpectrum::from_fid`]:
 //!
 //! - The frequency axis is centered (fftshifted), running from the most
-//!   negative offset to the most positive in uniform [`freq_resolution_hz`]
-//!   steps.
+//!   negative offset to the most positive in uniform
+//!   [`freq_resolution_hz`](DiscreteSpectrum::freq_resolution_hz) steps.
 //! - Amplitudes are the raw complex FFT values, also fftshifted. Callers
 //!   choose their presentation: magnitude ([`DiscreteSpectrum::magnitude`])
 //!   is simplest and phase-free; real/imag expose the absorption / dispersion
