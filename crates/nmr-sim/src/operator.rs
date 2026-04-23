@@ -341,10 +341,7 @@ mod tests {
 
     fn two_proton_system() -> SpinSystem {
         SpinSystem::new(
-            vec![
-                Spin::new(Isotope::H1, 0.0),
-                Spin::new(Isotope::H1, 1.0),
-            ],
+            vec![Spin::new(Isotope::H1, 0.0), Spin::new(Isotope::H1, 1.0)],
             14.0954,
         )
     }
@@ -398,10 +395,7 @@ mod tests {
     fn lift_mixed_isotope_system_has_correct_dimension() {
         // 1H (dim 2) + 2H (dim 3) → product dimension 6.
         let sys = SpinSystem::new(
-            vec![
-                Spin::new(Isotope::H1, 0.0),
-                Spin::new(Isotope::H2, 0.0),
-            ],
+            vec![Spin::new(Isotope::H1, 0.0), Spin::new(Isotope::H2, 0.0)],
             14.0954,
         );
         let op = iz_at(&sys, 0);

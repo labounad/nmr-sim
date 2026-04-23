@@ -66,7 +66,7 @@ impl Isotope {
     pub const fn two_i(self) -> u32 {
         match self {
             Isotope::H1 | Isotope::C13 | Isotope::N15 | Isotope::F19 | Isotope::P31 => 1, // I = 1/2
-            Isotope::H2 => 2, // I = 1
+            Isotope::H2 => 2,                                                             // I = 1
         }
     }
 
@@ -159,7 +159,7 @@ impl Spin {
 
     /// The chemical-shift-only Larmor offset, in rad/s, assuming a rotating frame at the bare-isotope Larmor.
     /// Formula: Δω = −γ · B₀ · δ · 10⁻⁶.
-    pub fn shift_angular(&self, b0_tesla: f64) -> f64 { 
+    pub fn shift_angular(&self, b0_tesla: f64) -> f64 {
         -self.isotope.gamma() * b0_tesla * self.shift_ppm * 1e-6
     }
 
@@ -173,7 +173,11 @@ impl Spin {
 impl std::fmt::Display for Spin {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if let Some(label) = &self.label {
-            write!(f, "{} ({} @ {:.3} ppm)", label, self.isotope, self.shift_ppm)
+            write!(
+                f,
+                "{} ({} @ {:.3} ppm)",
+                label, self.isotope, self.shift_ppm
+            )
         } else {
             write!(f, "{} @ {:.3} ppm", self.isotope, self.shift_ppm)
         }
@@ -220,7 +224,8 @@ impl SpinSystem {
     }
 
     pub fn larmor_angulars(&self) -> Vec<f64> {
-        self.spins.iter()
+        self.spins
+            .iter()
             .map(|spin| spin.larmor_angular(self.b0_tesla))
             .collect()
     }
@@ -297,18 +302,20 @@ mod tests {
         let spin = Spin::new(Isotope::H1, 0.0);
         let b0 = 14.0954;
         let expected_rad_per_s = Isotope::H1.larmor_hz(b0) * 2.0 * std::f64::consts::PI;
-        assert!((spin.larmor_angular(b0) - expected_rad_per_s).abs() < 1e-3)
+        assert!((spin.larmor_angular(b0) - expected_rad_per_s).abs() < 1e-3);
     }
 
-    #[test] 
+    #[test]
     fn larmor_angular_shifts_linearly_with_ppm() {
         let b0 = 14.0954;
         let s_zero = Spin::new(Isotope::H1, 0.0);
         let s_ten = Spin::new(Isotope::H1, 10.0);
         let delta_rad_per_s = (s_ten.larmor_angular(b0) - s_zero.larmor_angular(b0)).abs();
         let expected = 6000.0 * 2.0 * std::f64::consts::PI; // (10 ppm or 6000 Hz in rad/s)
-        assert!((delta_rad_per_s - expected).abs() / expected < 1e-3,
-            "got {delta_rad_per_s}, expected {expected}");
+        assert!(
+            (delta_rad_per_s - expected).abs() / expected < 1e-3,
+            "got {delta_rad_per_s}, expected {expected}"
+        );
     }
 
     #[test]
@@ -331,7 +338,7 @@ mod tests {
                 Spin::new(Isotope::H1, 2.0),
                 Spin::new(Isotope::C13, 50.0),
             ],
-            14.0954
+            14.0954,
         );
         assert_eq!(sys.larmor_angulars().len(), 3);
     }
@@ -339,10 +346,7 @@ mod tests {
     #[test]
     fn larmor_angulars_agree_with_per_spin_method() {
         let b0 = 14.0954;
-        let spins = vec![
-            Spin::new(Isotope::H1, 1.0),
-            Spin::new(Isotope::C13, 77.0),
-        ];
+        let spins = vec![Spin::new(Isotope::H1, 1.0), Spin::new(Isotope::C13, 77.0)];
         let sys = SpinSystem::new(spins.clone(), b0);
         let omegas = sys.larmor_angulars();
 
@@ -355,7 +359,7 @@ mod tests {
     fn larmor_decomposes_into_bare_plus_shift() {
         let b0 = 14.0954;
         let s = Spin::new(Isotope::H1, 7.26); // chloroform proton, roughly
-        let bare = -Isotope::H1.gamma() * b0;           // rotating-frame reference
+        let bare = -Isotope::H1.gamma() * b0; // rotating-frame reference
         let total = s.larmor_angular(b0);
         let offset = s.shift_angular(b0);
         assert!((total - (bare + offset)).abs() < 1e-3);
