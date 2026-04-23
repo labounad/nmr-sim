@@ -14,10 +14,21 @@ readme = "../../README.md"
 workspace = true
 
 [dependencies]
-# Intentionally empty for now. Upcoming additions (see docs/architecture.md):
-# - nalgebra or ndarray + linear-algebra backend, for dense spin operators
-# - num-complex, for complex-valued density matrices
-# - rayon, for embarrassingly-parallel spectral computations
+# Complex numbers. `num-complex` is the de-facto standard and is what nalgebra
+# uses internally for its complex matrix types.
+num-complex = "0.4"
+
+# Dense linear algebra. We use nalgebra for matrices (`DMatrix<Complex<f64>>`)
+# and will add `nalgebra-lapack` later for fast Hermitian eigendecomposition.
+# For now, default features are enough — we only need allocation + basic ops.
+nalgebra = "0.33"
+
+# Future deps (kept as comments so we remember the plan):
+# - nalgebra-lapack     # complex Hermitian eigendecomposition (needs system BLAS)
+# - rayon               # parallelism for powder-average / ensemble sampling
 
 [dev-dependencies]
-# approx = "0.5"     # coming soon: for numerical test assertions
+# `approx` lets us write assert_relative_eq!(a, b, epsilon = 1e-10) instead
+# of open-coding `(a - b).abs() < 1e-10` everywhere. Worth it once we're
+# comparing matrix elements.
+approx = "0.5"

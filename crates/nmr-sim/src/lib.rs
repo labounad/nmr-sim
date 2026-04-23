@@ -51,6 +51,7 @@
 
 #![doc(html_root_url = "https://docs.rs/nmr-sim")]
 
+// --- First-order backend (v0.1.0): the Pascal's-triangle multiplet engine. ---
 pub mod coupling;
 pub mod peak;
 pub mod spectrum;
@@ -60,6 +61,15 @@ pub use coupling::{expand_peak, pascal_row, Coupling};
 pub use peak::Peak;
 pub use spectrum::Spectrum;
 pub use template::LorentzianTemplate;
+
+// --- Quantum engine (M1+): spin systems, operators, Hamiltonians. ---
+pub mod hamiltonian;
+pub mod operator;
+pub mod spin;
+
+pub use hamiltonian::{Hamiltonian, ZeemanH};
+pub use operator::Operator;
+pub use spin::{Isotope, Spin, SpinSystem};
 
 /// A chemically-distinct NMR signal before J-coupling is expanded into
 /// sub-peaks.
