@@ -203,12 +203,34 @@ impl DiscreteSpectrum {
         self.frequencies_hz.iter().map(|f| f * hz_to_ppm).collect()
     }
 
-    /// Write the magnitude spectrum to CSV, in ppm.
+    /// Write the absorption-mode spectrum to CSV, in ppm.
     ///
     /// Columns: `chemical_shift_ppm,intensity`. Sorted in the usual NMR
     /// display order: ppm descending (leftmost column is the most positive
     /// shift — i.e., the left edge of the plot), so the file is directly
     /// plottable without a reversing step.
+    ///
+    /// "Intensity" is the **real part** of the complex FFT — i.e. the
+    /// absorption-mode spectrum. This matches what commercial NMR software
+    /// (Mestrenova, Topspin, NMRPipe) displays after phase correction:
+    /// symmetric Lorentzian lineshapes with fast-decaying tails and a
+    /// baseline that genuinely returns to zero (positive and negative sinc
+    /// side lobes cancel out).
+    ///
+    /// # Phase assumption
+    ///
+    /// This method assumes the spectrum is already phased — i.e. that the
+    /// underlying FID is purely real at `t = 0`. The standard pipeline in
+    /// this crate (thermal `I_x` state, `M⁻` observable, no pulse sequence)
+    /// satisfies that by construction: `Tr[M⁻ · ρ₀]` is real positive, so
+    /// `Re{FFT}` is the absorption-mode line and no phase correction is
+    /// needed.
+    ///
+    /// If you've introduced an arbitrary initial phase (by applying pulses,
+    /// starting from a non-standard state, etc.), the real part will be a
+    /// mixture of absorption and dispersion and the lineshapes will look
+    /// twisted. Phase-correct first, or fall back to [`Self::magnitude`] +
+    /// your own CSV writer.
     pub fn to_csv_ppm(
         &self,
         filename: &str,
@@ -219,8 +241,8 @@ impl DiscreteSpectrum {
         use std::io::Write;
 
         let ppms = self.frequencies_ppm(reference_isotope, b0_tesla);
-        let mags = self.magnitude();
-        let mut rows: Vec<(f64, f64)> = ppms.into_iter().zip(mags).collect();
+        let intensities = self.real();
+        let mut rows: Vec<(f64, f64)> = ppms.into_iter().zip(intensities).collect();
         // Descending ppm — downfield on the left, upfield on the right,
         // matching how spectrometers plot 1H spectra.
         rows.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));

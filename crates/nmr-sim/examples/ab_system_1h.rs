@@ -36,8 +36,8 @@
 
 use nmr_sim::operator::total_m_minus;
 use nmr_sim::{
-    compute_fid, thermal_x_state, DiscreteSpectrum, Hamiltonian, Isotope, JCouplingH,
-    MatrixPropagator, Spin, SpinSystem, SumH, ZeemanH,
+    apodize_exponential, compute_fid, thermal_x_state, zero_fill, DiscreteSpectrum, Hamiltonian,
+    Isotope, JCouplingH, MatrixPropagator, Spin, SpinSystem, SumH, ZeemanH,
 };
 
 /// Chemical shifts (ppm) — fixed across the field scan.
@@ -45,6 +45,15 @@ const SHIFT_A_PPM: f64 = 3.0;
 const SHIFT_B_PPM: f64 = 3.5;
 /// Scalar coupling (Hz) — fixed across the field scan.
 const J_HZ: f64 = 7.0;
+/// Exponential line broadening applied to the FID before FFT (Hz). 1 Hz is
+/// the conventional default for 1D 1H: large enough that each peak spans
+/// several FFT bins after zero-filling, small enough to leave J-splittings
+/// resolved. When real T₂ relaxation lands in a later milestone this should
+/// drop to 0.
+const LB_HZ: f64 = 1.0;
+/// Zero-fill factor. Frequency-domain interpolation only — the underlying
+/// resolution is still 1 / (N · dt). 4× matches Topspin's default for 1D.
+const ZF_FACTOR: usize = 4;
 
 fn b0_for_mhz(mhz: f64) -> f64 {
     // 14.0954 T ↔ 600 MHz for 1H; scale linearly.
@@ -88,14 +97,39 @@ fn simulate_at(mhz: f64) {
 
     // ---- FID ----
     //
-    // Longer N = sharper multiplet lines. J = 7 Hz needs ≲ 1 Hz resolution
-    // to visibly resolve the splitting → N·Δt ≳ 1 s → N ≳ 20_000.
-    // 16_384 points gives Δf ≈ 1.22 Hz, which is good enough for roofing
-    // patterns to be obvious by eye.
+    // Two concerns set the lower bound on N:
+    //
+    // 1. Resolving the J-splitting. J = 7 Hz needs ≲ 1 Hz bin width →
+    //    N · Δt ≳ 1 s → N ≳ 20_000.
+    // 2. Letting the FID decay before truncation. With LB = 1 Hz the
+    //    envelope is exp(−π · LB · t); at t = N · Δt = 3.28 s (N = 65_536,
+    //    Δt = 50 μs) that's ≈ 3.5 × 10⁻⁵. If we stop earlier the residual
+    //    amplitude gets truncated by a rectangular window and the FFT
+    //    picks up a boxcar-sinc — in absorption mode that shows up as
+    //    signed ripples of period 1/T around each peak, 7%-of-peak at
+    //    0.82 s of acquisition (N = 16_384) and falling to ~invisible by
+    //    3.28 s (N = 65_536). This is the "buy a longer FID" trick that
+    //    real spectrometers use implicitly via T₂ relaxation.
+    //
+    // 65_536 points also gives Δf_raw = 0.305 Hz → 0.076 Hz after 4× zero-
+    // fill → ~13 bins per FWHM, so peaks render smooth instead of pointy.
+    // Cost for an AB (4×4 matrix) system: 4× more matmul steps, still
+    // sub-millisecond per field.
     let rho0 = thermal_x_state(&sys);
     let obs = total_m_minus(&sys);
-    let n_points = 16_384;
-    let fid = compute_fid(&p, &rho0, &obs, n_points);
+    let n_points = 65_536;
+    let mut fid = compute_fid(&p, &rho0, &obs, n_points);
+
+    // ---- Processing: apodize then zero-fill ----
+    //
+    // Without apodization the truncated undamped FID would FFT to a sinc
+    // (narrow main lobe + side-lobe ringing), and the raw bin width
+    // Δf = 1/(N·dt) ≈ 1.22 Hz would put only ~1 bin across the main lobe —
+    // so the rendered peaks look like spikes, not lines. Exponential
+    // apodization convolves the spectrum with a Lorentzian of FWHM ≈ LB_HZ;
+    // zero-filling interpolates that Lorentzian onto a finer bin grid.
+    apodize_exponential(&mut fid, dt, LB_HZ);
+    let fid = zero_fill(fid, ZF_FACTOR);
 
     // ---- Spectrum ----
     let spectrum = DiscreteSpectrum::from_fid(&fid, dt);

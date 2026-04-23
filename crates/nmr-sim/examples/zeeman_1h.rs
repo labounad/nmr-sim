@@ -21,8 +21,8 @@
 
 use nmr_sim::operator::total_m_minus;
 use nmr_sim::{
-    compute_fid, thermal_x_state, DiagonalPropagator, DiscreteSpectrum, Isotope, Spin, SpinSystem,
-    ZeemanH,
+    apodize_exponential, compute_fid, thermal_x_state, zero_fill, DiagonalPropagator,
+    DiscreteSpectrum, Isotope, Spin, SpinSystem, ZeemanH,
 };
 
 fn main() {
@@ -51,14 +51,28 @@ fn main() {
 
     // --- 4. FID ---
     //
-    // 8192 points × 50 μs = ~0.41 s of "acquisition time". Frequency
-    // resolution: 1/(N·dt) ≈ 2.44 Hz ≈ 0.004 ppm at 600 MHz.
-    let n_points = 8192;
+    // N = 65_536 × 50 μs = 3.28 s of "acquisition time". Raw frequency
+    // resolution 1/(N·dt) ≈ 0.305 Hz ≈ 5×10⁻⁴ ppm at 600 MHz.
+    //
+    // Why this many points: with LB = 1 Hz (see step 5) the FID envelope
+    // at t = N·dt is exp(−π·1·3.28) ≈ 3.5×10⁻⁵, so the rectangular window
+    // imposed by truncation multiplies essentially zero — no boxcar-sinc
+    // artifacts on the spectrum. A shorter N (8k, 16k, …) leaves meaningful
+    // residual amplitude at the cutoff and produces visible sinc ripples
+    // around each peak in absorption mode. On a 3-spin diagonal propagator
+    // this is cheap; each FID sample is a 2^N_spins × 2^N_spins matrix.
+    let n_points = 65_536;
     let rho0 = thermal_x_state(&sys);
     let observable = total_m_minus(&sys);
-    let fid = compute_fid(&p, &rho0, &observable, n_points);
+    let mut fid = compute_fid(&p, &rho0, &observable, n_points);
 
-    // --- 5. Spectrum ---
+    // --- 5. Processing + spectrum ---
+    //
+    // Apodize with 1 Hz exponential line broadening (phenomenological stand-in
+    // for T₂ until the relaxation milestone lands) and zero-fill 4× to
+    // interpolate the peaks onto a smooth display grid.
+    apodize_exponential(&mut fid, dt, 1.0);
+    let fid = zero_fill(fid, 4);
     let spectrum = DiscreteSpectrum::from_fid(&fid, dt);
     println!(
         "Spectrum: {} bins, Δf = {:.2} Hz ({:.4} ppm)",

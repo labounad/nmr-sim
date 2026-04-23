@@ -443,7 +443,7 @@ These are one-liners:
 
 - `magnitude()` returns $|S[m]|$ at each bin — the simplest, phase-free display. Broader peaks than absorption-mode (√2× FWHM for a Lorentzian).
 - `real()` and `imag()` expose the absorption/dispersion split. Without phase correction they're whatever the raw FFT gave; phase correction and auto-phasing is future work.
-- `to_csv_ppm(filename, isotope, b0)` writes magnitude vs ppm to a CSV, sorted by descending ppm so the file plots directly in NMR-standard orientation (downfield on the left).
+- `to_csv_ppm(filename, isotope, b0)` writes the **absorption-mode** spectrum (real part of the FFT) vs ppm to a CSV, sorted by descending ppm so the file plots directly in NMR-standard orientation (downfield on the left). Absorption is what Mestrenova/Topspin display after phase correction; our standard pipeline is phased by construction (real thermal state + $M^-$ observable → $\mathrm{FID}(0)$ is real positive), so no phase correction is needed. Use `magnitude()` + your own writer if you ever need the phase-free display instead.
 
 ---
 
@@ -553,7 +553,7 @@ The ppms match the input shifts to within one bin ($\pm$0.002 ppm). The magnitud
 }
 ```
 
-Dump the magnitude-vs-ppm table to CSV, sorted descending in ppm (NMR-standard orientation). Open it in any plotting tool and you'll see three narrow, sinc-shaped peaks at 1.5, 3.7, and 7.2 ppm.
+Dump the absorption-mode (real-part) spectrum vs ppm to CSV, sorted descending in ppm (NMR-standard orientation). Open it in any plotting tool and you'll see three narrow, sinc-shaped peaks at 1.5, 3.7, and 7.2 ppm — or, with apodization + zero-fill applied, smooth Lorentzians at those positions.
 
 ---
 

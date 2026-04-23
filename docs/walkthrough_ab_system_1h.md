@@ -162,22 +162,40 @@ If we had picked `DiagonalPropagator::new` here, the call would panic with "Diag
 
 If you want the code to pick automatically, wrap both in a factory that queries `try_as_diagonal`. Nothing stops you; the trait shape supports it.
 
-### 2.5 The rest of the pipeline is unchanged
+### 2.5 FID
 
 ```rust
 let rho0 = thermal_x_state(&sys);
 let obs = total_m_minus(&sys);
 let n_points = 16_384;
-let fid = compute_fid(&p, &rho0, &obs, n_points);
+let mut fid = compute_fid(&p, &rho0, &obs, n_points);
+```
 
+Identical to the Zeeman example. `compute_fid` takes a `&dyn Propagator` — neither it nor `DiscreteSpectrum` knows or cares whether the propagator is diagonal or dense. If we add a `KrylovPropagator` later, or a `SparsePropagator`, this line doesn't change.
+
+16 384 points at `dt = 50 μs` gives an acquisition window of ~0.82 s → raw frequency resolution $\Delta f = 1/T \approx 1.22$ Hz. That's comfortable for a $J = 7$ Hz splitting — but it's not enough bins, as the next section explains.
+
+### 2.6 Processing: apodization + zero-fill
+
+```rust
+apodize_exponential(&mut fid, dt, LB_HZ);     // 1 Hz line broadening
+let fid = zero_fill(fid, ZF_FACTOR);          // 4× frequency-domain interpolation
 let spectrum = DiscreteSpectrum::from_fid(&fid, dt);
 ```
 
-Identical to the Zeeman example. `compute_fid` takes a `&dyn Propagator` — neither it nor `DiscreteSpectrum` knows or cares whether the propagator is diagonal or dense. If we add a `KrylovPropagator` later, or a `SparsePropagator`, these two lines don't change.
+Two standard NMR processing steps live between the FID and the FFT. Skipping them produces technically-correct-but-unreadable spectra, so this is where the example earns its "usable output" badge.
 
-16 384 points at `dt = 50 μs` gives an acquisition window of ~0.82 s → frequency resolution $\Delta f = 1/T \approx 1.22$ Hz. That's comfortable for a $J = 7$ Hz splitting.
+**Why apodize?** Our FID has no relaxation physics yet: each transition oscillates as $e^{i\omega t}$ with constant amplitude, and we truncate at $N$ samples. Fourier-transforming a box-windowed complex exponential gives a **sinc** centered at $\omega$: a very narrow main lobe plus slowly-decaying side-lobes. In the absorption-mode output (`to_csv_ppm` writes the real part) those lobes alternate sign and mostly cancel around zero, but they still shape the flanks of each peak; in magnitude mode they rectify into visible positive ringing. Either way, multiplying the FID pointwise by $e^{-\pi \cdot \text{LB} \cdot t}$ convolves the spectrum with a Lorentzian of FWHM = `LB_HZ` Hz (absorption mode; magnitude mode FWHM is $\sqrt{3}$ larger), which both rounds the peak and kills the ringing.
 
-### 2.6 Reporting
+This is *phenomenological* — it's what a real FID would look like if every transition relaxed with the same $T_2 = 1/(\pi\,\text{LB\_HZ})$. When we implement proper relaxation in a later milestone, the FID will come out of `compute_fid` already damped and we can drop the line-broadening call (or leave it as an optional display knob).
+
+**Why zero-fill?** The raw bin width $\Delta f = 1/(N \cdot dt) \approx 0.305$ Hz is already a few times smaller than the apodized-peak FWHM, but one more factor of 4 buys us ~13 bins per FWHM — the difference between a "smooth Lorentzian" and "a Lorentzian drawn with a pencil that has a blunt tip". Zero-filling pads the FID with zeros to $k \cdot N$ samples before the FFT, which emits $k \cdot N$ bins each $\Delta f / k$ Hz wide covering the same ±Nyquist window. **This is interpolation, not super-resolution**: the underlying information content is fixed by the original $N$ and $dt$, but you can now *see* the continuous Lorentzian shape instead of its coarse sampling.
+
+**Why is $N$ so large?** `n_points = 65_536` gives acquisition time $T = N \cdot dt = 3.28$ s. With `LB_HZ = 1.0` the envelope at the truncation point is $e^{-\pi \cdot 1 \cdot 3.28} \approx 3.5 \times 10^{-5}$ — the FID is essentially zero by the time we stop sampling, so the rectangular window implicit in "we only have $N$ samples" has nothing to act on. A shorter FID (say $N = 16\,384$, $T = 0.82$ s) leaves 7.7% residual at truncation, and the FFT picks up a boxcar-sinc: in absorption mode this is visible as signed ripples of period $1/T \approx 1.22$ Hz crossing zero around each peak. Buying a longer FID is the same trick real spectrometers use implicitly — their signal decays via $T_2$ before the ADC stops sampling.
+
+Why these defaults? `LB_HZ = 1.0` and `ZF_FACTOR = 4` are both what Bruker Topspin ships for out-of-the-box 1D 1H. At those values the post-processing bin width is $0.305 / 4 \approx 0.076$ Hz — about thirteen bins per FWHM — and with $N = 65\,536$ the boxcar ripples are five orders of magnitude below peak height. At very low field (60 MHz) the same 1 Hz line broadening turns into $1/60 = 0.017$ ppm on the plotted axis, still narrow enough to resolve the 7 Hz J-splitting visibly. If you're doing research-grade J analysis, lowering `LB_HZ` to ~0.3 and raising $N$ further (to keep $\pi \cdot \text{LB} \cdot T \gtrsim 10$) is reasonable; for display and validation, 1 Hz / 65k / 4× is the right default.
+
+### 2.7 Reporting
 
 ```rust
 let delta_ppm = (SHIFT_A_PPM - SHIFT_B_PPM).abs();
