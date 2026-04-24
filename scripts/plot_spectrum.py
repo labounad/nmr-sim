@@ -41,7 +41,7 @@ fig, ax = plt.subplots(figsize=(12, 5))
 ax.plot(ppm, intensity, linewidth=0.8)
 ax.set_xlabel('Chemical Shift (ppm)')
 ax.set_ylabel('Intensity')
-ax.set_title(f'NMR Spectrum: {args.filename}  (use zoom tool to inspect multiplets)')
+ax.set_title(f'NMR Spectrum: {args.filename}')
 
 if args.full:
     # Show every bin; invert so downfield is on the left per NMR convention.
