@@ -19,9 +19,29 @@ workspace = true
 num-complex = "0.4"
 
 # Dense linear algebra. We use nalgebra for matrices (`DMatrix<Complex<f64>>`)
-# and will add `nalgebra-lapack` later for fast Hermitian eigendecomposition.
-# For now, default features are enough — we only need allocation + basic ops.
+# and optionally pair it with `nalgebra-lapack` for fast Hermitian
+# eigendecomposition — see the `parallel-lapack` feature below.
 nalgebra = "0.33"
+
+# Sparse linear algebra. `nalgebra-sparse` ships alongside nalgebra and shares
+# its scalar-type conventions (RealField / ComplexField), so interop with the
+# dense `DMatrix` / `DVector` types is seamless. We use it for the sparse
+# Hamiltonian fast path (Zeeman, J-coupling, and their `SumH` composition) —
+# a prerequisite for the Krylov propagator where each step is a sparse matvec.
+# Version tracks nalgebra 0.33.
+nalgebra-sparse = "0.10"
+
+# Hermitian eigendecomposition via a system BLAS/LAPACK. Optional: the default
+# build ships a pure-Rust fallback (nalgebra's `symmetric_eigen`), which is
+# portable but single-threaded and starts to hurt around N = 13 spin-½'s. The
+# `parallel-lapack` feature routes `EigenPropagator` through this crate and
+# picks up threaded LAPACK at link time — Accelerate on macOS, OpenBLAS /
+# Intel MKL on Linux HPC. Version tracks nalgebra 0.33.
+#
+# default-features = false matters: the upstream default is "netlib", which
+# drags in a FORTRAN toolchain at build time. Users select one of our
+# `lapack-*` features below to pick a real backend.
+nalgebra-lapack = { version = "0.25", default-features = false, optional = true }
 
 # FFT. rustfft is the de-facto pure-Rust FFT crate. Needed for turning an FID
 # (time-domain complex signal) into a frequency-domain spectrum. Pure Rust,
@@ -29,8 +49,35 @@ nalgebra = "0.33"
 rustfft = "6"
 
 # Future deps (kept as comments so we remember the plan):
-# - nalgebra-lapack     # complex Hermitian eigendecomposition (needs system BLAS)
-# - rayon               # parallelism for powder-average / ensemble sampling
+# - rayon               # parallelism for independent FIDs (parameter scans,
+#                       # molecule libraries) and parallel SpMV in Krylov.
+
+[features]
+default = []
+
+# Route `EigenPropagator`'s Hermitian eigendecomposition through
+# `nalgebra-lapack` and whatever system LAPACK is linked in. Users must
+# additionally enable exactly one backend feature below so the linker knows
+# which LAPACK to bind against. Example:
+#
+#     # macOS (Apple Silicon / Intel)
+#     cargo build --features lapack-accelerate
+#
+#     # Linux HPC
+#     cargo build --features lapack-openblas
+#
+# The pure-Rust fallback remains available with no features enabled — handy
+# for CI and for platforms where linking system BLAS is a hassle.
+parallel-lapack = ["dep:nalgebra-lapack"]
+
+# Backend selection. Each enables `parallel-lapack` so the `cfg` gate in
+# `eigen_propagator.rs` lights up; they differ only in which LAPACK library
+# `nalgebra-lapack` links against. Pick exactly one — enabling two will
+# produce duplicate-symbol link errors, not a runtime choice.
+lapack-accelerate = ["parallel-lapack", "nalgebra-lapack/accelerate"]
+lapack-openblas   = ["parallel-lapack", "nalgebra-lapack/openblas"]
+lapack-intel-mkl  = ["parallel-lapack", "nalgebra-lapack/intel-mkl"]
+lapack-netlib     = ["parallel-lapack", "nalgebra-lapack/netlib"]
 
 [dev-dependencies]
 # `approx` lets us write assert_relative_eq!(a, b, epsilon = 1e-10) instead

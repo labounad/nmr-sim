@@ -64,6 +64,7 @@ pub use template::LorentzianTemplate;
 
 // --- Quantum engine (M1+): spin systems, operators, Hamiltonians. ---
 pub mod discrete_spectrum;
+pub mod eigen_propagator;
 pub mod fid;
 pub mod hamiltonian;
 pub mod operator;
@@ -73,8 +74,9 @@ pub mod spin;
 pub mod state;
 
 pub use discrete_spectrum::DiscreteSpectrum;
+pub use eigen_propagator::{EigenPropagator, EIGEN_BACKEND};
 pub use fid::{compute_fid, trace_product};
-pub use hamiltonian::{Hamiltonian, JCouplingH, SumH, ZeemanH};
+pub use hamiltonian::{Hamiltonian, JCouplingH, SparseH, SumH, ZeemanH};
 pub use operator::Operator;
 pub use processing::{apodize_exponential, zero_fill};
 pub use propagator::{DiagonalPropagator, MatrixPropagator, Propagator};
