@@ -38,10 +38,35 @@ with open(args.filename) as f:
         intensity.append(float(row[1]))
 
 fig, ax = plt.subplots(figsize=(12, 5))
-ax.plot(ppm, intensity, linewidth=0.8)
-ax.set_xlabel('Chemical Shift (ppm)')
-ax.set_ylabel('Intensity')
+
+# Styling constants — grouped so future tweaks don't hunt through the file.
+AXIS_GREY = '#808080'      # spines and tick marks
+BASELINE_GREY = '#D3D3D3'  # lighter, for the horizontal baseline
+
+# Light-grey baseline at y = 0. zorder=0 keeps it behind the spectrum so the
+# black trace draws cleanly on top where they intersect.
+ax.axhline(0, color=BASELINE_GREY, linewidth=0.8, zorder=0)
+
+# Spectrum: pure black, half the previous linewidth (0.8 -> 0.4).
+ax.plot(ppm, intensity, color='black', linewidth=0.4)
+
+# X-axis title in Helvetica Neue Light; Y-axis label dropped entirely.
+ax.set_xlabel('Chemical Shift (ppm)', family='Helvetica Neue', weight='light', fontsize=12)
 ax.set_title(f'NMR Spectrum: {args.filename}')
+
+# Tick labels (numeric axis values) in Helvetica Neue Bold.
+for label in ax.get_xticklabels() + ax.get_yticklabels():
+    label.set_fontfamily('Helvetica Neue')
+    label.set_fontweight('bold')
+
+# Remove the top/right spines; colour the remaining bottom/left spines and
+# tick marks grey. labelcolor stays default black so the Helvetica Neue Bold
+# numerals read cleanly against white.
+ax.spines['top'].set_visible(False)
+ax.spines['right'].set_visible(False)
+ax.spines['bottom'].set_color(AXIS_GREY)
+ax.spines['left'].set_color(AXIS_GREY)
+ax.tick_params(axis='both', which='both', color=AXIS_GREY, labelcolor='black')
 
 if args.full:
     # Show every bin; invert so downfield is on the left per NMR convention.

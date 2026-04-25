@@ -1,5 +1,12 @@
+import os
+
 import matplotlib.pyplot as plt
 import numpy as np
+
+# Shared examples-output dir, mirroring the Rust example convention. Lives at
+# the repo root so a single gitignore line covers every example's output.
+OUTPUT_DIR = "examples/outputs"
+os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 fig, axes = plt.subplots(2, 2, figsize=(12, 10))
 
@@ -59,5 +66,6 @@ ax.set_xlim(-5, 5)
 ax.legend()
 
 plt.tight_layout()
-plt.savefig("template_explanation.png", dpi=150)
-print("Saved template_explanation.png")
+out_path = os.path.join(OUTPUT_DIR, "template_explanation.png")
+plt.savefig(out_path, dpi=150)
+print(f"Saved {out_path}")

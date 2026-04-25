@@ -21,7 +21,7 @@ for the full plan.
 ```sh
 # Requires stable Rust (edition 2021, MSRV 1.75).
 cargo run --release --example ibuprofen_1h
-# → writes spectrum.csv in the current directory
+# → writes examples/outputs/spectrum.csv (directory created if absent)
 
 cargo test --workspace       # run the tests
 cargo doc --workspace --open # browse the API docs

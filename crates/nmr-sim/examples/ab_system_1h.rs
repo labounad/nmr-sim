@@ -31,14 +31,20 @@
 //! cargo run --release --example ab_system_1h
 //! ```
 //!
-//! Writes `ab_1h_<mhz>mhz_spectrum.csv` once per field in the working
-//! directory. Inspect any of them with `scripts/plot_spectrum.py`.
+//! Writes `examples/outputs/ab_1h_<mhz>mhz_spectrum.csv` once per field
+//! (directory created if absent). Inspect any of them with
+//! `scripts/plot_spectrum.py`.
+
+use std::fs::create_dir_all;
 
 use nmr_sim::operator::total_m_minus;
 use nmr_sim::{
     apodize_exponential, compute_fid, thermal_x_state, zero_fill, DiscreteSpectrum, Hamiltonian,
     Isotope, JCouplingH, MatrixPropagator, Spin, SpinSystem, SumH, ZeemanH,
 };
+
+/// Centralised output directory shared by every example.
+const OUTPUT_DIR: &str = "examples/outputs";
 
 /// Chemical shifts (ppm) — fixed across the field scan.
 const SHIFT_A_PPM: f64 = 3.0;
@@ -158,11 +164,11 @@ fn simulate_at(mhz: f64) {
         );
     }
 
-    // Save to CSV, one file per field, in the working directory.
-    let filename = format!("ab_1h_{}mhz_spectrum.csv", mhz as u32);
-    match spectrum.to_csv_ppm(&filename, Isotope::H1, b0) {
-        Ok(()) => println!("Saved {filename}"),
-        Err(e) => eprintln!("Error writing {filename}: {e}"),
+    // Save to CSV, one file per field, in the shared examples/outputs/.
+    let path = format!("{OUTPUT_DIR}/ab_1h_{}mhz_spectrum.csv", mhz as u32);
+    match spectrum.to_csv_ppm(&path, Isotope::H1, b0) {
+        Ok(()) => println!("Saved {path}"),
+        Err(e) => eprintln!("Error writing {path}: {e}"),
     }
 }
 
@@ -172,6 +178,8 @@ fn main() {
          J = {J_HZ} Hz. Scanning B₀ to walk strong → weak coupling."
     );
 
+    create_dir_all(OUTPUT_DIR).expect("failed to create output directory");
+
     // From low field (strong coupling dominant) to high field (first-order
     // doublets emerge). 60 MHz is "bench-top" NMR; 1000 MHz is the current
     // state of the art.
@@ -180,6 +188,6 @@ fn main() {
     }
 
     println!(
-        "\nPlot any file with:\n    python scripts/plot_spectrum.py ab_1h_60mhz_spectrum.csv\n",
+        "\nPlot any file with:\n    python scripts/plot_spectrum.py {OUTPUT_DIR}/ab_1h_60mhz_spectrum.csv\n",
     );
 }

@@ -10,9 +10,17 @@
 //! cargo run --release --example ibuprofen_1h
 //! ```
 //!
-//! Writes `spectrum.csv` in the current working directory.
+//! Writes `examples/outputs/spectrum.csv` (created if absent), so generated
+//! files stay out of the repo root and a single gitignore line covers every
+//! example.
+
+use std::fs::create_dir_all;
 
 use nmr_sim::{Coupling, Peak, PeakDef, Spectrum};
+
+/// Centralised output directory shared by every example. Lives at the
+/// workspace root because `cargo run --example` runs from there.
+const OUTPUT_DIR: &str = "examples/outputs";
 
 fn main() {
     let spectrometer_freq = 600.0_f64; // MHz
@@ -98,8 +106,10 @@ fn main() {
     println!("Expanded to {} sub-peaks", peaks.len());
 
     let spectrum = Spectrum::new(peaks, 0.0, 10.0, spectrometer_freq);
-    match spectrum.to_csv("spectrum.csv") {
-        Ok(()) => println!("Saved spectrum.csv"),
+    create_dir_all(OUTPUT_DIR).expect("failed to create output directory");
+    let path = format!("{OUTPUT_DIR}/spectrum.csv");
+    match spectrum.to_csv(&path) {
+        Ok(()) => println!("Saved {path}"),
         Err(e) => eprintln!("Error: {e}"),
     }
 }

@@ -1,5 +1,12 @@
+import os
+
 import matplotlib.pyplot as plt
 import numpy as np
+
+# Shared examples-output dir, mirroring the Rust example convention. Lives at
+# the repo root so a single gitignore line covers every example's output.
+OUTPUT_DIR = "examples/outputs"
+os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 x_fine = np.linspace(-10, 10, 50000)
 L_true = 1.0 / (1.0 + x_fine**2)
@@ -42,5 +49,6 @@ ax.set_title("Interpolated Lorentzians at different template sizes")
 ax.legend()
 
 plt.tight_layout()
-plt.savefig("accuracy_test.png", dpi=150)
-print("Saved accuracy_test.png")
+out_path = os.path.join(OUTPUT_DIR, "accuracy_test.png")
+plt.savefig(out_path, dpi=150)
+print(f"Saved {out_path}")

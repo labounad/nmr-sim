@@ -18,12 +18,9 @@ __pycache__/
 .venv/
 venv/
 
-# Simulation outputs produced by the example binary + Python scripts.
-# These sit at the repo root because `cargo run --example` runs from
-# the workspace root. Keep them out of git.
-/spectrum.csv
-/spectrum.png
-/accuracy_test.png
-/template_explanation.png
-# Quantum-engine example outputs (zeeman_1h_spectrum.csv, future ibuprofen_1h_spectrum.csv, etc.).
-/*_spectrum.csv
+# Simulation outputs produced by the Rust examples + Python helper scripts
+# (CSV spectra, PNG plots, MP4/GIF animations, field-sweep subdirectories).
+# Every example writes here so a single rule covers them all — see the
+# `OUTPUT_DIR` constants in `crates/nmr-sim/examples/*.rs` and the matching
+# convention in `scripts/`.
+/examples/outputs/

@@ -17,13 +17,19 @@
 //! cargo run --release --example zeeman_1h
 //! ```
 //!
-//! Writes `zeeman_1h_spectrum.csv` in the current working directory.
+//! Writes `examples/outputs/zeeman_1h_spectrum.csv` (created if absent) so
+//! every example deposits its outputs in one shared, gitignored directory.
+
+use std::fs::create_dir_all;
 
 use nmr_sim::operator::total_m_minus;
 use nmr_sim::{
     apodize_exponential, compute_fid, thermal_x_state, zero_fill, DiagonalPropagator,
     DiscreteSpectrum, Isotope, Spin, SpinSystem, ZeemanH,
 };
+
+/// Centralised output directory shared by every example.
+const OUTPUT_DIR: &str = "examples/outputs";
 
 fn main() {
     // --- 1. Spin system ---
@@ -93,8 +99,10 @@ fn main() {
     }
 
     // --- 6. CSV output ---
-    match spectrum.to_csv_ppm("zeeman_1h_spectrum.csv", Isotope::H1, b0) {
-        Ok(()) => println!("Saved zeeman_1h_spectrum.csv"),
+    create_dir_all(OUTPUT_DIR).expect("failed to create output directory");
+    let path = format!("{OUTPUT_DIR}/zeeman_1h_spectrum.csv");
+    match spectrum.to_csv_ppm(&path, Isotope::H1, b0) {
+        Ok(()) => println!("Saved {path}"),
         Err(e) => eprintln!("Error writing CSV: {e}"),
     }
 }

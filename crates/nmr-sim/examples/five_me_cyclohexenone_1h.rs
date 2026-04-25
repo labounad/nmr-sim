@@ -74,7 +74,11 @@
 //! arithmetic in the eigenbasis and is identical across backends — a useful
 //! sanity check that any timing improvement is surgical, not global.
 //!
-//! Writes `five_me_cyclohexenone_1h_spectrum.csv` in the working directory.
+//! Writes `examples/outputs/five_me_cyclohexenone_1h_spectrum.csv` (directory
+//! created if absent) so every example deposits its outputs in one shared,
+//! gitignored directory.
+
+use std::fs::create_dir_all;
 
 use nmr_sim::operator::total_m_minus;
 use nmr_sim::{
@@ -82,10 +86,19 @@ use nmr_sim::{
     Hamiltonian, Isotope, JCouplingH, Spin, SpinSystem, SumH, ZeemanH, EIGEN_BACKEND,
 };
 
-/// Field strength for this simulation.
+/// Centralised output directory shared by every example.
+const OUTPUT_DIR: &str = "examples/outputs";
+
+/// Spectrometer 1H frequency in MHz — the user-facing "this is a 600 MHz
+/// system" knob. Change this to rerun at 400 / 500 / 700 / 900 etc., and
+/// `B0_TESLA` below re-derives automatically.
 const SPECTROMETER_MHZ: f64 = 600.0;
-/// Conversion: 14.0954 T ↔ 600 MHz for 1H; scales linearly in field.
-const B0_TESLA: f64 = 14.0954;
+/// B₀ derived from `SPECTROMETER_MHZ` via 2πν = γ_H · B₀. Keeping these
+/// linked at compile time removes the two-sources-of-truth footgun where
+/// editing MHz without re-editing T would make the simulation disagree
+/// with its own printout. Using `Isotope::H1::gamma()` (a `const fn`)
+/// means no magic `42.5774 MHz/T` constant sitting around.
+const B0_TESLA: f64 = 2.0 * std::f64::consts::PI * SPECTROMETER_MHZ * 1e6 / Isotope::H1.gamma();
 
 /// Chemical shifts (ppm) for groups A..H — from Lucas's assignment table.
 /// Index into the returned spin list follows the A..G ring-proton ordering
@@ -273,14 +286,15 @@ fn main() {
     }
 
     // ---- CSV output ----
-    let filename = "five_me_cyclohexenone_1h_spectrum.csv";
-    match spectrum.to_csv_ppm(filename, Isotope::H1, B0_TESLA) {
-        Ok(()) => println!("Saved {filename}"),
-        Err(e) => eprintln!("Error writing {filename}: {e}"),
+    create_dir_all(OUTPUT_DIR).expect("failed to create output directory");
+    let path = format!("{OUTPUT_DIR}/five_me_cyclohexenone_1h_spectrum.csv");
+    match spectrum.to_csv_ppm(&path, Isotope::H1, B0_TESLA) {
+        Ok(()) => println!("Saved {path}"),
+        Err(e) => eprintln!("Error writing {path}: {e}"),
     }
 
     println!(
-        "\nPlot with:\n    python scripts/plot_spectrum.py {filename}\n\
+        "\nPlot with:\n    python scripts/plot_spectrum.py {path}\n\
          (default window −1 to 15 ppm — try `--xlim 0 8` to zoom the \
          aliphatic region)",
     );

@@ -49,8 +49,10 @@ nalgebra-lapack = { version = "0.25", default-features = false, optional = true 
 rustfft = "6"
 
 # Future deps (kept as comments so we remember the plan):
-# - rayon               # parallelism for independent FIDs (parameter scans,
-#                       # molecule libraries) and parallel SpMV in Krylov.
+# - rayon (lib-side)    # parallel SpMV in Krylov / batched parallelism inside
+#                       # the propagator. Currently rayon is only a dev-dep
+#                       # (used by examples for parameter scans); promote here
+#                       # when the Krylov work needs it inside the library.
 
 [features]
 default = []
@@ -84,3 +86,11 @@ lapack-netlib     = ["parallel-lapack", "nalgebra-lapack/netlib"]
 # of open-coding `(a - b).abs() < 1e-10` everywhere. Worth it once we're
 # comparing matrix elements.
 approx = "0.5"
+
+# rayon: data-parallelism for example driver code (parameter scans like
+# `five_me_cyclohexenone_field_sweep`, where each spectrometer frequency is
+# an independent simulation). Dev-only because the library itself stays
+# single-threaded at the API surface — callers can wrap library calls in
+# their own rayon if desired. Will likely move to [dependencies] once the
+# Krylov propagator wants in-loop SpMV parallelism.
+rayon = "1.10"
