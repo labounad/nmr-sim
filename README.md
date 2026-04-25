@@ -38,7 +38,7 @@ Or as a git dependency today:
 
 ```toml
 [dependencies]
-nmr-sim = { git = "https://github.com/ORG/nmr-sim" }   # TODO: real URL
+nmr-sim = { git = "https://github.com/labounad/nmr-sim" }   
 ```
 
 ## Repository layout
